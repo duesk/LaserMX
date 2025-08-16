@@ -22,3 +22,6 @@ venv/
 # Build
 dist/
 build/
+
+# Notas personales
+notas.txt

@@ -21,7 +21,5 @@ dependencies = [
 lasermx = "lasermx.cli:main"
 lasermx-gui = "lasermx.main:main"
 
-[tool.setuptools.packages.find]
-where = ["."]
-include = ["lasermx*"]
-exclude = ["tests*", "examples*"]
+[tool.setuptools]
+packages = ["lasermx"]

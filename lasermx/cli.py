@@ -7,7 +7,7 @@ from .utils.serial_utils import list_serial_ports
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description="LaserMX CLI")
-    parser.add_argument("--list", action="true", help="Listar puertos seriales y salir.", default=False)
+    parser.add_argument("--list", action="store_true", help="Listar puertos seriales y salir.", default=False)
     parser.add_argument("--port", help="Puerto serial (e.g., /dev/tty.usbserial-XXXX).")
     parser.add_argument("--baud", type=int, default=115200, help="Baudios (default 115200).")
     parser.add_argument("--cmd", help="Enviar un comando GRBL y salir.")
