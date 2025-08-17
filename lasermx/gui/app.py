@@ -92,6 +92,8 @@ class MainWindow(QMainWindow):
                 self._append(f"✅ Conectado a {dev}")
                 self.btn_connect.setText("Desconectar")
                 self.btn_home.setEnabled(True)
+                self._driver.send_command("$H")  #enviar $H al conectar
+                    
             except Exception as e:
                 self._driver = None
                 self._append(f"❌ Error al conectar: {e}")
