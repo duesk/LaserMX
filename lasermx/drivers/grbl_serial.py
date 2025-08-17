@@ -1,48 +1,67 @@
-import serial, threading, time
-from typing import Optional, Callable, Iterable, List
-from serial.tools import list_ports
+"""
+Driver serial GRBL (no bloqueante) para LaserMX.
 
-def list_serial_ports() -> List[str]:
-    return [p.device for p in list_ports.comports()]
+- Conecta/desconecta
+- Envía líneas de G-code/comandos
+- Lee respuestas en un hilo y las pasa a un callback
+"""
+from __future__ import annotations
+import threading
+import time
+from typing import Optional, Callable
+import serial
 
 class GrblSerialDriver:
-    def __init__(self, on_line: Optional[Callable[[str], None]] = None, timeout: float = 0.1):
-        self._ser = None
-        self._reader = None
+    def __init__(self, on_line: Optional[Callable[[str], None]] = None):
+        self.on_line = on_line or (lambda s: None)
+        self._ser: Optional[serial.Serial] = None
+        self._rx_thread: Optional[threading.Thread] = None
         self._stop = threading.Event()
-        self.on_line = on_line
-        self.timeout = timeout
 
-    def connect(self, port: str, baudrate: int = 115200):
-        self._ser = serial.Serial(port, baudrate=baudrate, timeout=self.timeout)
+    def connect(self, port: str, baud: int = 115200, timeout: float = 1.0) -> None:
+        self._ser = serial.Serial(port, baudrate=baud, timeout=timeout)
         self._stop.clear()
-        self._reader = threading.Thread(target=self._read_loop, daemon=True)
-        self._reader.start()
+        # hilo de lectura
+        self._rx_thread = threading.Thread(target=self._reader_loop, daemon=True)
+        self._rx_thread.start()
+        # limpia banner inicial de GRBL si aparece
         time.sleep(0.1)
-        self._ser.reset_input_buffer()
+        self._drain()
 
-    def disconnect(self):
-        self._stop.set()
-        if self._reader and self._reader.is_alive():
-            self._reader.join(timeout=1.0)
-        if self._ser:
-            self._ser.close()
-            self._ser = None
+    def _drain(self) -> None:
+        if not self._ser:
+            return
+        try:
+            while self._ser.in_waiting:
+                line = self._ser.readline().decode(errors="ignore").strip()
+                if line:
+                    self.on_line(line)
+        except Exception:
+            pass
 
-    def send_command(self, cmd: str):
-        if not self._ser or not self._ser.is_open:
-            raise RuntimeError("No hay conexión abierta.")
-        self._ser.write((cmd.strip() + "\n").encode("ascii"))
-
-    def _read_loop(self):
-        buf = b""
+    def _reader_loop(self) -> None:
+        assert self._ser is not None
         while not self._stop.is_set():
-            chunk = self._ser.read(256)
-            if not chunk:
-                continue
-            buf += chunk
-            while b"\n" in buf:
-                line, buf = buf.split(b"\n", 1)
-                text = line.decode(errors="ignore").strip()
-                if self.on_line:
-                    self.on_line(text)
+            try:
+                line = self._ser.readline().decode(errors="ignore").strip()
+                if line:
+                    self.on_line(line)
+            except Exception:
+                break
+
+    def send_command(self, line: str) -> None:
+        if not self._ser:
+            raise RuntimeError("No conectado")
+        data = (line.strip() + "\n").encode("ascii", errors="ignore")
+        self._ser.write(data)
+        self._ser.flush()
+
+    def disconnect(self) -> None:
+        self._stop.set()
+        if self._rx_thread and self._rx_thread.is_alive():
+            self._rx_thread.join(timeout=1.0)
+        if self._ser:
+            try:
+                self._ser.close()
+            finally:
+                self._ser = None

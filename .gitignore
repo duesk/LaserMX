@@ -24,5 +24,6 @@ dist/
 build/
 
 # Notas personales
-notas.txt.DS_Store
+notas.txt
+.DS_Store
 .venv/
