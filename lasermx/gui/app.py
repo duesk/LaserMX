@@ -11,18 +11,20 @@ from PySide6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QLabel, QComboBox, QPushButton, QPlainTextEdit
 )
-from PySide6.QtCore import Qt, QTimer
+from PySide6.QtCore import Qt, QTimer, Signal
 from serial.tools import list_ports
 from lasermx.drivers.grbl_serial import GrblSerialDriver
 import sys
+from typing import Optional
 
 class MainWindow(QMainWindow):
+    line_signal = Signal(str)
     def __init__(self) -> None:
         super().__init__()
         self.setWindowTitle("LaserMX")
         self.resize(640, 480)
 
-        self._driver: GrblSerialDriver | None = None
+        self._driver: Optional[GrblSerialDriver] = None
 
         # UI
         central = QWidget()
@@ -63,6 +65,7 @@ class MainWindow(QMainWindow):
         self._timer.setInterval(200)
         self._timer.timeout.connect(self._autoscroll)
         self._timer.start()
+        self.line_signal.connect(self._append)
 
     def refresh_ports(self) -> None:
         self.cmb.clear()
@@ -73,8 +76,8 @@ class MainWindow(QMainWindow):
         self.log.appendPlainText(text)
 
     def _on_line(self, text: str) -> None:
-        # este callback viene de un hilo -> usa invokeMethod implícito de Qt con prints “seguros”
-        self._append(text)
+        # Este callback llega desde un hilo del driver: emitir señal para actualizar el UI de forma segura.
+        self.line_signal.emit(text)
 
     def toggle_connection(self) -> None:
         if self._driver is None:
@@ -114,6 +117,16 @@ class MainWindow(QMainWindow):
 
     def _autoscroll(self) -> None:
         self.log.verticalScrollBar().setValue(self.log.verticalScrollBar().maximum())
+
+    def closeEvent(self, event) -> None:
+        """Asegura que la conexión serial se cierre al salir."""
+        try:
+            if self._driver is not None:
+                self._driver.disconnect()
+                self._append("🔌 Desconectado.")
+        finally:
+            self._driver = None
+        super().closeEvent(event)
 
 def main() -> None:
     app = QApplication(sys.argv)

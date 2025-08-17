@@ -14,7 +14,37 @@ def main(argv=None):
     parser.add_argument("--file", help="Archivo SVG o DXF a convertir.")
     parser.add_argument("--to-gcode", help="Ruta de salida para G-code.")
     parser.add_argument("--run", action="store_true", help="Enviar el G-code al controlador tras convertir.")
+    parser.add_argument(
+        "--gui",
+        action="store_true",
+        help="Inicia la interfaz gráfica de LaserMX (PySide6)",
+    )
+
+    # Soporte opcional a subcomando (para que 'lasermx gui' funcione)
+    subparsers = parser.add_subparsers(dest="command")
+    subparsers.add_parser("gui", help="Inicia la interfaz gráfica de LaserMX")
+
     args = parser.parse_args(argv)
+
+    # Si el usuario pide la GUI (por flag o subcomando), importar en caliente para evitar fallos
+    if getattr(args, "gui", False) or getattr(args, "command", None) == "gui":
+        try:
+            from lasermx.gui.app import main as gui_main  # import diferido
+        except ModuleNotFoundError as e:
+            print(
+                "\n[LaserMX] No se pudo cargar la interfaz gráfica.\n"
+                f"Detalle: {e}\n\n"
+                "Sugerencias:\n"
+                "  1) Activa tu venv actual.\n"
+                "  2) Instala dependencias GUI:\n"
+                "     python -m pip install PySide6-Essentials==6.9.1 shiboken6==6.9.1\n"
+                "     # (Opcional) PySide6-Addons==6.9.1\n\n"
+                "  3) Si usas Python 3.13, PySide6 >= 6.9.1.\n",
+                file=sys.stderr,
+            )
+            return 2
+        gui_main()
+        return 0
 
     if args.list:
         for p in list_serial_ports():
